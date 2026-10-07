@@ -1,0 +1,9 @@
+{
+  "extends": "@acutehimanshu/config/tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "types": ["vite/client", "node", "vitest/globals", "@testing-library/jest-dom"],
+    "paths": { "@/*": ["./src/*"] }
+  },
+  "include": ["src", "vite.config.ts", "vitest.setup.ts"]
+}

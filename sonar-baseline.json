@@ -1,0 +1,15 @@
+{
+  "total": 172,
+  "rules": {
+    "sonarjs/cognitive-complexity": 5,
+    "sonarjs/deprecation": 5,
+    "sonarjs/function-return-type": 5,
+    "sonarjs/misplaced-loop-counter": 1,
+    "sonarjs/no-inverted-boolean-check": 1,
+    "sonarjs/no-nested-conditional": 82,
+    "sonarjs/no-nested-functions": 4,
+    "sonarjs/no-nested-template-literals": 3,
+    "sonarjs/prefer-read-only-props": 65,
+    "sonarjs/pseudo-random": 1
+  }
+}

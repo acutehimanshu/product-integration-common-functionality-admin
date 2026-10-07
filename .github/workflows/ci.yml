@@ -1,0 +1,36 @@
+name: CI
+
+# Needs a PACKAGES_TOKEN secret (a token with read:packages) to install the
+# @acutehimanshu/* packages from GitHub Packages. See README: CI.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+        run: if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile; else pnpm install; fi
+
+      - run: pnpm run format:check
+      - run: pnpm run lint
+      # SonarQube rules with no server: fails if any rule rises above sonar-baseline.json.
+      - run: pnpm run lint:sonar:gate
+      - run: pnpm run typecheck
+      - run: pnpm run test:coverage
+      - run: pnpm run build
+        env:
+          VITE_API_BASE_URL: http://localhost:3100

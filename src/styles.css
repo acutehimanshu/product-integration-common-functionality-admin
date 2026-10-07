@@ -1,0 +1,13 @@
+/* Shared theme from @acutehimanshu/ui, by relative path like the Next portals. */
+@import "../node_modules/@acutehimanshu/ui/src/styles/globals.css";
+
+/* Tailwind scans this app; the shared components live outside it. */
+@source "../node_modules/@acutehimanshu/ui/src";
+
+/* The Next portals get these from next/font; here @fontsource self-hosts
+   the same fonts (imported in main.tsx) and we point the theme at them. */
+:root {
+  --font-geist-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-geist-mono: "Geist Mono Variable", ui-monospace, monospace;
+  --font-lexend: "Lexend Variable", ui-sans-serif, system-ui, sans-serif;
+}
