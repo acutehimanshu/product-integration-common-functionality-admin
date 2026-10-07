@@ -38,7 +38,22 @@ in product-integration-common-functionality-shared.
   3. Copy the token and keep it out of git: it goes in an environment
      variable, never in a file you commit.
 
-Set it in the terminal before `pnpm install` (the repo's `.npmrc` reads it):
+**Once per machine**, tell pnpm to use that token for GitHub Packages. pnpm
+reads registry tokens only from your **user-level** `~/.npmrc` (not the
+repo's `.npmrc`, which only says where the `@acutehimanshu/*` packages live).
+Add one line that reads the token from an environment variable:
+
+```bash
+# macOS / Linux / Git Bash
+echo '//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}' >> ~/.npmrc
+```
+
+```powershell
+# Windows PowerShell
+Add-Content "$HOME\.npmrc" '//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}'
+```
+
+Then set the token in your terminal before `pnpm install`:
 
 ```bash
 # macOS / Linux / Git Bash
@@ -46,9 +61,13 @@ export NODE_AUTH_TOKEN=<your token>
 ```
 
 ```powershell
-# Windows PowerShell (this session; use setx NODE_AUTH_TOKEN "<token>" to keep it)
+# Windows PowerShell (this session; setx NODE_AUTH_TOKEN "<token>" keeps it for new terminals)
 $env:NODE_AUTH_TOKEN = "<your token>"
 ```
+
+If `pnpm install` says **401 / authentication token not provided**, the
+`~/.npmrc` line is missing; **403** means the token lacks `read:packages`
+or can't see the repo.
 
 ## Setup
 
