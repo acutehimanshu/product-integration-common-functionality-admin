@@ -18,9 +18,14 @@ import { ReasonDialog } from "@/components/reason-dialog"
 import { api, getErrorMessage } from "@/lib/api"
 import { usePageTitle } from "@/lib/use-page-title"
 import { CountryEditor } from "@/modules/settings/country-editor"
-import { RulesScreen } from "@/modules/settings/rules-screen"
 import { MessagingScreen } from "@/modules/settings/messaging"
 import { PaymentsScreen } from "@/modules/settings/payments"
+import { ReviewFields, reviewDraftOf, reviewSettingsOf } from "./review-settings"
+import { DisputeFields, disputeDraftOf, disputeSettingsOf } from "./dispute-settings"
+import { ShippingFields, shippingDraftOf, shippingSettingsOf } from "./shipping-settings"
+import { ChargesScreen } from "@/modules/settings/charges"
+import { ReturnsScreen } from "@/modules/settings/returns"
+import { NegotiationScreen } from "@/modules/settings/negotiation"
 
 const settingsKeys = { all: ["admin", "settings"] as const }
 
@@ -44,6 +49,8 @@ const LIMITS: Array<{ key: keyof Limits; label: string; unit: string }> = [
     label: "Seller replies to problems within",
     unit: "days",
   },
+  { key: "listingExpiryDays", label: "Listings expire after", unit: "days (0 = never)" },
+  { key: "payoutHoldHours", label: "Payouts wait after delivery", unit: "hours" },
 ]
 
 function SettingsForm({ current }: { current: AdminSettings }) {
@@ -53,6 +60,24 @@ function SettingsForm({ current }: { current: AdminSettings }) {
       Object.fromEntries(
         LIMITS.map(({ key }) => [key, String(current.settings.limits[key])])
       ) as Record<keyof Limits, string>
+  )
+  const [checkoutPayment, setCheckoutPayment] = useState(current.settings.checkoutPayment)
+  const [feeOnRefund, setFeeOnRefund] = useState(current.settings.feeOnRefund)
+  const [complianceSignOff, setComplianceSignOff] = useState(
+    current.settings.complianceSignOff
+  )
+  const [contentApproval, setContentApproval] = useState(
+    current.settings.content.approvalRequired
+  )
+  const [retention, setRetention] = useState(
+    String(current.settings.analytics.rawRetentionDays)
+  )
+  const [reviews, setReviews] = useState(() => reviewDraftOf(current.settings.reviews))
+  const [disputes, setDisputes] = useState(() =>
+    disputeDraftOf(current.settings.disputes)
+  )
+  const [shipping, setShipping] = useState(() =>
+    shippingDraftOf(current.settings.shipping)
   )
   const fee = current.settings.platformFee
   const [feeOn, setFeeOn] = useState(fee !== null)
@@ -65,15 +90,38 @@ function SettingsForm({ current }: { current: AdminSettings }) {
     const parsed = {} as Limits
     for (const { key, label } of LIMITS) {
       const value = Number(limits[key])
-      if (!Number.isInteger(value) || value < 1)
-        return `${label}: enter a whole number above 0.`
+      // Listing expiry may be 0 (never); every other limit is at least 1.
+      const min = key === "listingExpiryDays" ? 0 : 1
+      if (!Number.isInteger(value) || value < min)
+        return `${label}: enter a whole number of ${min} or more.`
       parsed[key] = value
     }
     const percent = Number(feePercent)
     if (feeOn && !(percent >= 0 && percent <= 50))
       return "Platform fee: enter a percentage from 0 to 50."
+    const shippingSettings = shippingSettingsOf(shipping)
+    if ("problem" in shippingSettings) return shippingSettings.problem
+    const disputeSettings = disputeSettingsOf(disputes)
+    if ("problem" in disputeSettings) return disputeSettings.problem
+    const rawRetentionDays = Number(retention)
+    if (
+      !Number.isInteger(rawRetentionDays) ||
+      rawRetentionDays < 7 ||
+      rawRetentionDays > 730
+    )
+      return "Analytics: keep raw events 7 to 730 days."
+    const reviewSettings = reviewSettingsOf(reviews)
+    if ("problem" in reviewSettings) return reviewSettings.problem
     return {
       limits: parsed,
+      checkoutPayment,
+      feeOnRefund,
+      complianceSignOff,
+      shipping: shippingSettings.settings,
+      disputes: disputeSettings.settings,
+      reviews: reviewSettings.settings,
+      analytics: { rawRetentionDays },
+      content: { approvalRequired: contentApproval },
       platformFee: feeOn ? { percent, chargedTo } : null,
     }
   }
@@ -106,6 +154,79 @@ function SettingsForm({ current }: { current: AdminSettings }) {
         </div>
       </section>
 
+      <section aria-labelledby="payment-mode-heading" className="flex flex-col gap-3">
+        <Heading as="h2" size="h3" id="payment-mode-heading">
+          Paying for several shops
+        </Heading>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="checkout-payment">At checkout</Label>
+          <NativeSelect
+            id="checkout-payment"
+            className="sm:w-96"
+            value={checkoutPayment}
+            onChange={(e) =>
+              setCheckoutPayment(e.target.value as MarketplaceSettings["checkoutPayment"])
+            }
+          >
+            <option value="combined">One payment, split into an order per shop</option>
+            <option value="per_seller">A separate payment for each shop</option>
+          </NativeSelect>
+        </div>
+      </section>
+
+      <ShippingFields draft={shipping} onChange={setShipping} />
+      <DisputeFields draft={disputes} onChange={setDisputes} />
+      <ReviewFields draft={reviews} onChange={setReviews} />
+
+      <section aria-labelledby="analytics-heading" className="flex flex-col gap-2">
+        <Heading as="h2" size="h3" id="analytics-heading">
+          Analytics
+        </Heading>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="raw-retention">Keep raw events for (days)</Label>
+          <Input
+            id="raw-retention"
+            type="number"
+            min={7}
+            max={730}
+            className="w-24"
+            value={retention}
+            onChange={(e) => setRetention(e.target.value)}
+          />
+          <p className="text-muted-foreground text-xs">
+            Daily counts are kept after that.
+          </p>
+        </div>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={contentApproval}
+            onChange={(e) => setContentApproval(e.target.checked)}
+          />
+          Content pages need a second person&apos;s approval before they go live (legal
+          pages always do)
+        </label>
+      </section>
+
+      <section aria-labelledby="compliance-heading" className="flex flex-col gap-2">
+        <Heading as="h2" size="h3" id="compliance-heading">
+          Compliance
+        </Heading>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={complianceSignOff}
+            onChange={(e) => setComplianceSignOff(e.target.checked)}
+          />
+          Tax, import charges and holding buyers&apos; money need a legal/tax sign-off per
+          country
+        </label>
+        <p className="text-muted-foreground text-xs">
+          Sign-offs are recorded on each country&apos;s page. Until then checkout there is
+          refused.
+        </p>
+      </section>
+
       <section aria-labelledby="fee-heading" className="flex flex-col gap-3">
         <Heading as="h2" size="h3" id="fee-heading">
           Platform fee
@@ -118,6 +239,20 @@ function SettingsForm({ current }: { current: AdminSettings }) {
           />
           Charge a platform fee
         </label>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="fee-on-refund">When a sale is refunded</Label>
+          <NativeSelect
+            id="fee-on-refund"
+            className="sm:w-96"
+            value={feeOnRefund}
+            onChange={(e) =>
+              setFeeOnRefund(e.target.value as MarketplaceSettings["feeOnRefund"])
+            }
+          >
+            <option value="keep">Marketbase keeps its fee</option>
+            <option value="reverse">The fee goes back in proportion to the refund</option>
+          </NativeSelect>
+        </div>
         {feeOn && (
           <div className="flex flex-wrap gap-3">
             <div className="flex flex-col gap-1.5">
@@ -196,7 +331,7 @@ function GlobalSettings() {
           new orders; orders already placed keep theirs.
         </Text>
         <Text className="text-sm">
-          <Link to="rules" className="font-medium underline underline-offset-4">
+          <Link to="/rules" className="font-medium underline underline-offset-4">
             Rules
           </Link>{" "}
           change a value for one country, category, seller type or seller, from a date.{" "}
@@ -207,7 +342,19 @@ function GlobalSettings() {
           <Link to="payments" className="font-medium underline underline-offset-4">
             Payments
           </Link>{" "}
-          the payment gateways.
+          the payment gateways;{" "}
+          <Link to="charges" className="font-medium underline underline-offset-4">
+            Charges
+          </Link>{" "}
+          adds fees, insurance, markup and discounts;{" "}
+          <Link to="returns" className="font-medium underline underline-offset-4">
+            Returns
+          </Link>{" "}
+          sets what buyers may ask for after delivery;{" "}
+          <Link to="negotiation" className="font-medium underline underline-offset-4">
+            Negotiation
+          </Link>{" "}
+          where offers are allowed and automatic answers.
         </Text>
       </div>
       {error ? (
@@ -289,9 +436,11 @@ export default function SettingsPage() {
     <Routes>
       <Route index element={<GlobalSettings />} />
       <Route path="countries/:code" element={<CountryEditor />} />
-      <Route path="rules" element={<RulesScreen />} />
       <Route path="messaging" element={<MessagingScreen />} />
       <Route path="payments" element={<PaymentsScreen />} />
+      <Route path="charges" element={<ChargesScreen />} />
+      <Route path="returns" element={<ReturnsScreen />} />
+      <Route path="negotiation" element={<NegotiationScreen />} />
     </Routes>
   )
 }

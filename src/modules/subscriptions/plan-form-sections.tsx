@@ -206,6 +206,30 @@ export function PerksSection({
         />
         Custom shop address (/shop/name)
       </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={draft.relationshipManager}
+          onChange={(e) => set("relationshipManager", e.target.checked)}
+        />
+        A named Marketbase relationship manager
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={draft.prioritySupport}
+          onChange={(e) => set("prioritySupport", e.target.checked)}
+        />
+        Priority support
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={draft.requiresVerification}
+          onChange={(e) => set("requiresVerification", e.target.checked)}
+        />
+        Only verified sellers can take this package
+      </label>
     </fieldset>
   )
 }

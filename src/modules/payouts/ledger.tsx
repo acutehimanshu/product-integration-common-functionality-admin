@@ -188,6 +188,9 @@ export function Ledger() {
             correction is a new entry.
           </Text>
         </div>
+        <Link to="/payouts/reconciliation" className="text-sm font-medium underline">
+          Match against the payment provider
+        </Link>
         <CsvButton
           path={`/admin/ledger/export?${exportQuery}`}
           filename="marketbase-ledger.csv"

@@ -21,6 +21,7 @@ export type AdminModuleId =
   | "admins"
   | "activity"
   | "reports"
+  | "rules"
 
 /**
  * An admin module also says what grants it (a section the super admin gives

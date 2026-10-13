@@ -15,11 +15,19 @@ export const sellerKeys = {
 }
 
 export function listSellers(
-  filter: { status: SellerReviewFilter; q: string; page: number },
+  filter: {
+    status: SellerReviewFilter
+    q: string
+    page: number
+    country?: string
+    type?: string
+  },
   options?: { signal?: AbortSignal }
 ): Promise<Page<AdminSellerRow>> {
   const params = new URLSearchParams({ status: filter.status, page: String(filter.page) })
   if (filter.q) params.set("q", filter.q)
+  if (filter.country) params.set("country", filter.country)
+  if (filter.type) params.set("type", filter.type)
   return api.get(`/admin/sellers?${params}`, options)
 }
 

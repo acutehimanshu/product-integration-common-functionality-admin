@@ -4,6 +4,7 @@ import { toast } from "sonner"
 import {
   MODERATION_ACTION_LABELS,
   REPORT_REASON_LABELS,
+  REPORT_SOURCE_LABELS,
   type ModerationAction,
 } from "@acutehimanshu/core/domain/admin-moderation"
 import { LISTING_STATUS_LABELS } from "@acutehimanshu/core/domain/listings"
@@ -16,6 +17,8 @@ import { Card, CardContent, CardHeader } from "@acutehimanshu/ui/components/ui/c
 import { Skeleton } from "@acutehimanshu/ui/components/ui/skeleton"
 import { AuditHistory } from "@/components/audit-history"
 import { ReasonDialog } from "@/components/reason-dialog"
+import { ListingHistory } from "@acutehimanshu/ui/components/listing-history"
+import { StockAdjust } from "@/modules/listings/stock-adjust"
 import { getErrorMessage } from "@/lib/api"
 import { formatDateTime } from "@/lib/format"
 import { usePageTitle } from "@/lib/use-page-title"
@@ -120,7 +123,7 @@ export function ModerationReview() {
                       <span className="font-medium">
                         {REPORT_REASON_LABELS[report.reason]}{" "}
                         <span className="text-muted-foreground font-normal">
-                          · {report.source === "rule" ? "automatic rule" : "buyer"} ·{" "}
+                          · {REPORT_SOURCE_LABELS[report.source]} ·{" "}
                           {formatDateTime(report.at)}
                         </span>
                       </span>
@@ -163,6 +166,49 @@ export function ModerationReview() {
               </CardContent>
             </Card>
           </div>
+
+          <Card>
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
+              <Heading as="h2" size="h3">
+                Stock and status
+              </Heading>
+              <StockAdjust
+                listingId={item.listingId}
+                available={item.listing.stock.available}
+                onSaved={() =>
+                  queryClient.invalidateQueries({ queryKey: moderationKeys.all })
+                }
+              />
+            </CardHeader>
+            <CardContent>
+              {item.listing.documents && item.listing.documents.length > 0 && (
+                <ul className="mb-3 flex flex-col gap-1 text-sm" aria-label="Documents">
+                  {item.listing.documents.map((document) => (
+                    <li key={document.url}>
+                      <a
+                        href={document.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline"
+                      >
+                        {document.name}
+                      </a>{" "}
+                      <span className="text-muted-foreground">
+                        (
+                        {document.visibility === "public" ? "shown to buyers" : "private"}
+                        )
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <ListingHistory
+                statusHistory={item.listing.statusHistory}
+                stockHistory={item.listing.stockHistory}
+                formatDate={formatDateTime}
+              />
+            </CardContent>
+          </Card>
 
           <AuditHistory entries={item.history} />
         </>

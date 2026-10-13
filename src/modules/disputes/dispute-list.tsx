@@ -3,7 +3,9 @@ import { Link, useSearchParams } from "react-router"
 import {
   PROBLEM_REASON_LABELS,
   type DisputeFilter,
+  ESCALATED_LABELS,
 } from "@acutehimanshu/core/domain/admin-disputes"
+import { CASE_PRIORITY_LABELS } from "@acutehimanshu/core/domain/case-thread"
 import { formatMoney } from "@acutehimanshu/core/money"
 import { PageContainer } from "@acutehimanshu/ui/components/page-container"
 import { Heading } from "@acutehimanshu/ui/components/heading"
@@ -20,9 +22,16 @@ import { disputeKeys, listDisputes, type DisputeListFilter } from "@/modules/dis
 
 const FILTERS: Array<{ value: DisputeFilter; label: string }> = [
   { value: "escalated", label: "To decide" },
+  { value: "overdue", label: "Overdue" },
+  { value: "payout_blocked", label: "Holding a payout" },
   { value: "returns", label: "Returns on the way" },
   { value: "resolved", label: "Decided" },
   { value: "all", label: "All" },
+]
+
+const ASSIGNEE_FILTERS = [
+  { value: "all", label: "Everyone's" },
+  { value: "me", label: "Assigned to me" },
 ]
 
 export function DisputeList() {
@@ -32,6 +41,7 @@ export function DisputeList() {
     status: FILTERS.find((f) => f.value === params.get("status"))?.value ?? "escalated",
     q: params.get("q") ?? "",
     page: Number(params.get("page")) || 1,
+    assignee: params.get("assignee") === "me" ? "me" : undefined,
   }
   const { data, isPending, error } = useQuery({
     queryKey: disputeKeys.list(filter),
@@ -43,10 +53,12 @@ export function DisputeList() {
       <div className="flex flex-col gap-1">
         <Heading>Disputes</Heading>
         <Text variant="muted">
-          Problems the buyer and seller couldn&apos;t settle — oldest first.
+          Problems the buyer and seller couldn&apos;t settle — most urgent, then oldest,
+          first.
         </Text>
       </div>
       <FilterTabs param="status" options={FILTERS} label="Filter disputes" />
+      <FilterTabs param="assignee" options={ASSIGNEE_FILTERS} label="Whose cases" />
       <SearchBox
         label="Search disputes"
         placeholder="Dispute or order ID, buyer or shop"
@@ -67,18 +79,21 @@ export function DisputeList() {
               <li key={row.id} className="flex flex-wrap items-center gap-3 p-3 text-sm">
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <Link to={row.id} className="font-medium hover:underline">
-                    {PROBLEM_REASON_LABELS[row.reason]} — order {row.orderId}
+                    {row.reasonLabel ?? PROBLEM_REASON_LABELS[row.reason] ?? row.reason} —
+                    order {row.orderId}
                   </Link>
                   <span className="text-muted-foreground text-xs">
                     {row.buyer.name ?? row.buyer.id} vs {row.seller.shopName} · reported{" "}
                     {timeAgo(row.createdAt)}
                   </span>
                 </div>
-                <Badge variant="outline">
-                  {row.escalatedBecause === "seller_rejected"
-                    ? "Seller rejected"
-                    : "Seller didn't reply"}
-                </Badge>
+                {row.priority !== "normal" && (
+                  <Badge variant={row.priority === "urgent" ? "destructive" : "outline"}>
+                    {CASE_PRIORITY_LABELS[row.priority]}
+                  </Badge>
+                )}
+                {row.assignee && <Badge variant="secondary">{row.assignee}</Badge>}
+                <Badge variant="outline">{ESCALATED_LABELS[row.escalatedBecause]}</Badge>
                 <span className="w-24 text-right">{formatMoney(row.orderTotal)}</span>
               </li>
             ))}

@@ -19,15 +19,13 @@ import { SearchBox } from "@/components/search-box"
 import { api, getErrorMessage } from "@/lib/api"
 import { formatDateTime } from "@/lib/format"
 import { usePageTitle } from "@/lib/use-page-title"
-
-const reviewKeys = {
-  all: ["admin", "reviews"] as const,
-  list: (filter: { status: ReviewFilter; q: string; page: number }) =>
-    [...reviewKeys.all, "list", filter] as const,
-}
+import { reviewKeys } from "@/modules/reviews/keys"
+import { ReviewExtras } from "@/modules/reviews/review-extras"
+import { RatingHubSync } from "@/modules/reviews/ratinghub-sync"
 
 const FILTERS: Array<{ value: ReviewFilter; label: string }> = [
   { value: "reported", label: "Reported" },
+  { value: "pending", label: "Waiting" },
   { value: "hidden", label: "Hidden" },
   { value: "all", label: "All" },
 ]
@@ -120,6 +118,7 @@ export default function ReviewsPage() {
                 ) : (
                   <p className="text-muted-foreground">No comment.</p>
                 )}
+                <ReviewExtras row={row} />
                 {row.reports.length > 0 && (
                   <ul
                     aria-label="Reports"
@@ -162,6 +161,7 @@ export default function ReviewsPage() {
           <Pager page={data} />
         </>
       )}
+      <RatingHubSync />
     </PageContainer>
   )
 }

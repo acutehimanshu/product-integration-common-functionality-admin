@@ -22,9 +22,17 @@ import { Input } from "@acutehimanshu/ui/components/ui/input"
 import { Label } from "@acutehimanshu/ui/components/ui/label"
 import { Skeleton } from "@acutehimanshu/ui/components/ui/skeleton"
 import { CsvButton } from "@/components/csv-button"
+import {
+  ExportButtons,
+  MyExports,
+  ReportNotes,
+  SavedViews,
+} from "@/modules/reports/report-tools"
 import { api, downloadCsv, getErrorMessage } from "@/lib/api"
 import { formatDateTime } from "@/lib/format"
 import { usePageTitle } from "@/lib/use-page-title"
+import { AnalyticsScreen } from "@/modules/reports/analytics"
+import { useAdmin } from "@/lib/auth"
 
 type ReportInfo = { id: ReportId; title: string; about: string }
 
@@ -140,6 +148,7 @@ function Schedules({ reports }: { reports: ReportInfo[] }) {
 
 function ReportList() {
   usePageTitle("Reports")
+  const isSuper = useAdmin().data?.isSuperAdmin ?? false
   const { data, error } = useQuery({
     queryKey: reportKeys.all,
     queryFn: ({ signal }) => api.get<ReportInfo[]>("/admin/reports", { signal }),
@@ -152,6 +161,11 @@ function ReportList() {
           Filter by date, country, category, seller and status; download any report as CSV
           or have it run on a schedule.
         </Text>
+        {isSuper && (
+          <Link to="analytics" className="text-sm font-medium underline">
+            Analytics: funnels, data quality and the event dictionary
+          </Link>
+        )}
       </div>
       {error ? (
         <Text role="alert" className="text-destructive">
@@ -176,6 +190,7 @@ function ReportList() {
             ))}
           </ul>
           <Schedules reports={data} />
+          <MyExports />
         </>
       )}
     </PageContainer>
@@ -185,8 +200,9 @@ function ReportList() {
 function ScheduleButton({ id, filters }: { id: ReportId; filters: string }) {
   const queryClient = useQueryClient()
   const [frequency, setFrequency] = useState<ScheduleFrequency>("weekly")
+  const [recipients, setRecipients] = useState("")
   return (
-    <div className="flex items-end gap-2">
+    <div className="flex flex-wrap items-end gap-2">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="schedule-frequency">Schedule</Label>
         <NativeSelect
@@ -201,6 +217,15 @@ function ScheduleButton({ id, filters }: { id: ReportId; filters: string }) {
           ))}
         </NativeSelect>
       </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="schedule-recipients">Email admins (optional)</Label>
+        <Input
+          id="schedule-recipients"
+          placeholder="name@marketbase.com, …"
+          value={recipients}
+          onChange={(e) => setRecipients(e.target.value)}
+        />
+      </div>
       <Button
         variant="outline"
         size="sm"
@@ -210,6 +235,10 @@ function ScheduleButton({ id, filters }: { id: ReportId; filters: string }) {
               reportId: id,
               frequency,
               filters: Object.fromEntries(new URLSearchParams(filters)),
+              recipients: recipients
+                .split(",")
+                .map((r) => r.trim())
+                .filter(Boolean),
             })
             await queryClient.invalidateQueries({ queryKey: reportKeys.schedules })
             toast.success("Scheduled — the first run is under Reports")
@@ -232,7 +261,10 @@ function ReportView() {
   ).toString()
   const { data, error, isFetching } = useQuery({
     queryKey: [...reportKeys.all, id, query],
-    queryFn: ({ signal }) => api.get<Report>(`/admin/reports/${id}?${query}`, { signal }),
+    queryFn: ({ signal }) =>
+      api.get<Report & { maskedColumns?: string[] }>(`/admin/reports/${id}?${query}`, {
+        signal,
+      }),
     placeholderData: keepPreviousData,
   })
   const categories = useQuery({
@@ -257,8 +289,10 @@ function ReportView() {
           path={`/admin/reports/${id}/export?${query}`}
           filename={`marketbase-${id}.csv`}
         />
+        <ExportButtons id={id as ReportId} query={query} />
         <ScheduleButton id={id as ReportId} filters={query} />
       </div>
+      <SavedViews id={id as ReportId} query={query} />
       <fieldset className="grid gap-3 sm:grid-cols-6">
         <legend className="mb-1 text-sm font-medium">Filters</legend>
         {(
@@ -312,6 +346,10 @@ function ReportView() {
               ? "Updating…"
               : `${data.rows.length} rows · run ${formatDateTime(data.generatedAt)}`}
           </Text>
+          <ReportNotes
+            maskedColumns={data.maskedColumns}
+            estimated={data.columns.filter((c) => c.estimated).map((c) => c.label)}
+          />
           {/* Focusable so keyboard users can scroll a wide report sideways. */}
           <div
             className="overflow-x-auto rounded-xl border"
@@ -381,6 +419,7 @@ export default function ReportsPage() {
   return (
     <Routes>
       <Route index element={<ReportList />} />
+      <Route path="analytics" element={<AnalyticsScreen />} />
       <Route path=":id" element={<ReportView />} />
     </Routes>
   )

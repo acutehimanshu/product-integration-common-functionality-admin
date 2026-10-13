@@ -8,6 +8,7 @@ import {
   ADMIN_SECTIONS,
   noPermissions,
   type AdminPermissions,
+  type AdminSecurity,
 } from "@acutehimanshu/core/domain/admin"
 import type {
   AdminAccount,
@@ -31,6 +32,7 @@ import { Pager } from "@/components/pager"
 import { PermissionsEditor } from "@/components/permissions-editor"
 import { ChangeList } from "@/components/change-list"
 import { ReasonDialog } from "@/components/reason-dialog"
+import { AccessLimits } from "./access-limits"
 import { SearchBox } from "@/components/search-box"
 import { api, getErrorMessage } from "@/lib/api"
 import { useAdmin } from "@/lib/auth"
@@ -40,7 +42,8 @@ import { usePageTitle } from "@/lib/use-page-title"
 const adminKeys = {
   all: ["admin", "admins"] as const,
   detail: (id: string) => ["admin", "admins", id] as const,
-  audit: (q: string, page: number) => ["admin", "audit", q, page] as const,
+  audit: (q: string, page: number, from = "", to = "") =>
+    ["admin", "audit", q, page, from, to] as const,
 }
 
 const hasAny = (permissions: AdminPermissions) =>
@@ -109,6 +112,102 @@ function InviteAdmin({ onSaved }: { onSaved: () => void }) {
   )
 }
 
+/** Two-step login for every admin (FRD-01 ADM-003): password, then an emailed code. */
+function TwoStepSetting() {
+  const queryClient = useQueryClient()
+  const key = [...adminKeys.all, "security"] as const
+  const { data } = useQuery({
+    queryKey: key,
+    queryFn: ({ signal }) => api.get<AdminSecurity>("/admin/security", { signal }),
+  })
+  if (!data) return null
+  const on = data.requireTwoStep
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4">
+      <div className="flex flex-col gap-1">
+        <Text className="font-medium">
+          Two-step login for every admin: {on ? "on" : "off"}
+        </Text>
+        <Text variant="muted" className="text-sm">
+          Password, then a code we email them. A code alone only lets someone set a
+          password. You can also turn it on for one admin from their page.
+        </Text>
+      </div>
+      <ReasonDialog
+        trigger={on ? "Turn off" : "Require two-step login"}
+        triggerVariant={on ? "outline" : "default"}
+        title={on ? "Stop requiring two-step login?" : "Require two-step login?"}
+        description={
+          on
+            ? "Admins without their own two-step setting log in with a password or a code alone again."
+            : "From their next login, every admin needs their password and an emailed code."
+        }
+        confirmLabel={on ? "Turn off" : "Require it"}
+        onConfirm={async (reason) => {
+          queryClient.setQueryData(
+            key,
+            await api.put<AdminSecurity>("/admin/security", {
+              requireTwoStep: !on,
+              reason,
+            })
+          )
+          toast.success(
+            on ? "Two-step login no longer required" : "Two-step login required"
+          )
+        }}
+      />
+    </div>
+  )
+}
+
+/** Maker-checker for rules (FRD-02 CFG-052): a second admin publishes each rule. */
+function RuleApprovalSetting() {
+  const queryClient = useQueryClient()
+  const key = [...adminKeys.all, "security"] as const
+  const { data } = useQuery({
+    queryKey: key,
+    queryFn: ({ signal }) => api.get<AdminSecurity>("/admin/security", { signal }),
+  })
+  if (!data) return null
+  const on = data.rulesNeedApproval
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4">
+      <div className="flex flex-col gap-1">
+        <Text className="font-medium">
+          Rules need a second admin: {on ? "on" : "off"}
+        </Text>
+        <Text variant="muted" className="text-sm">
+          A submitted rule waits until another admin with Rules access approves it. Give
+          at least one sub-admin the Rules section so someone can approve yours.
+        </Text>
+      </div>
+      <ReasonDialog
+        trigger={on ? "Turn off" : "Require approval"}
+        triggerVariant={on ? "outline" : "default"}
+        title={on ? "Stop requiring rule approval?" : "Require a second admin for rules?"}
+        description={
+          on
+            ? "Submitted rules apply from their start without approval. Rules already waiting stay waiting."
+            : "From now on, every submitted rule waits for another admin's approval."
+        }
+        confirmLabel={on ? "Turn off" : "Require it"}
+        onConfirm={async (reason) => {
+          queryClient.setQueryData(
+            key,
+            await api.put<AdminSecurity>("/admin/security", {
+              rulesNeedApproval: !on,
+              reason,
+            })
+          )
+          toast.success(
+            on ? "Rule approval no longer required" : "Rule approval required"
+          )
+        }}
+      />
+    </div>
+  )
+}
+
 function AdminList() {
   usePageTitle("Admin accounts")
   const queryClient = useQueryClient()
@@ -136,6 +235,8 @@ function AdminList() {
           <InviteAdmin onSaved={refresh} />
         </div>
       </div>
+      <TwoStepSetting />
+      <RuleApprovalSetting />
       {error ? (
         <Text role="alert" className="text-destructive">
           {getErrorMessage(error, "Couldn't load admins.")}
@@ -310,6 +411,11 @@ function AdminDetail() {
                       account={data}
                       onSaved={stored}
                     />
+                    <AccessLimits
+                      key={JSON.stringify([data.restrictedActions, data.countries])}
+                      account={data}
+                      onSaved={stored}
+                    />
                     <div>
                       <ReasonDialog
                         trigger={data.status === "active" ? "Deactivate" : "Reactivate"}
@@ -344,6 +450,31 @@ function AdminDetail() {
                               ? "Admin deactivated"
                               : "Admin reactivated"
                           )
+                        }}
+                      />
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Text className="text-sm">
+                        Two-step login for {data.name}: {data.twoStep ? "on" : "off"}
+                      </Text>
+                      <ReasonDialog
+                        trigger={data.twoStep ? "Turn off two-step" : "Turn on two-step"}
+                        triggerVariant="outline"
+                        title={`Two-step login for ${data.name}`}
+                        description={
+                          data.twoStep
+                            ? "They log in with a password or a code alone again (unless it's required for everyone)."
+                            : "From their next login: password, then a code we email them."
+                        }
+                        confirmLabel={data.twoStep ? "Turn off" : "Turn on"}
+                        onConfirm={async (reason) => {
+                          stored(
+                            await api.patch<AdminAccountDetail>(
+                              `/admin/admins/${data.id}`,
+                              { twoStep: !data.twoStep, reason }
+                            )
+                          )
+                          toast.success("Saved")
                         }}
                       />
                     </div>
@@ -422,14 +553,24 @@ function AdminDetail() {
 
 function AuditLog() {
   usePageTitle("Audit log")
-  const [params] = useSearchParams()
+  const [params, setParams] = useSearchParams()
   const q = params.get("q") ?? ""
+  const from = params.get("from") ?? ""
+  const to = params.get("to") ?? ""
   const page = Number(params.get("page")) || 1
+  const setDate = (key: "from" | "to", value: string) =>
+    setParams((current) => {
+      const next = new URLSearchParams(current)
+      if (value) next.set(key, value)
+      else next.delete(key)
+      next.delete("page")
+      return next
+    })
   const { data, isPending, error } = useQuery({
-    queryKey: adminKeys.audit(q, page),
+    queryKey: adminKeys.audit(q, page, from, to),
     queryFn: ({ signal }) =>
       api.get<Page<AuditEntry>>(
-        `/admin/audit?${new URLSearchParams({ q, page: String(page) })}`,
+        `/admin/audit?${new URLSearchParams({ q, page: String(page), from, to })}`,
         {
           signal,
         }
@@ -459,6 +600,26 @@ function AuditLog() {
         label="Search the audit log"
         placeholder="Admin, record, action or reason"
       />
+      <div className="flex flex-wrap gap-3">
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="audit-from">From</Label>
+          <Input
+            id="audit-from"
+            type="date"
+            value={from}
+            onChange={(e) => setDate("from", e.target.value)}
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="audit-to">To</Label>
+          <Input
+            id="audit-to"
+            type="date"
+            value={to}
+            onChange={(e) => setDate("to", e.target.value)}
+          />
+        </div>
+      </div>
       {error ? (
         <Text role="alert" className="text-destructive">
           {getErrorMessage(error, "Couldn't load the audit log.")}

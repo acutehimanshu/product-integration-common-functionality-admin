@@ -3,12 +3,18 @@ import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { noPermissions, presetPermissions } from "@acutehimanshu/core/domain/admin"
 import { LoginForm } from "@/components/login-form"
-import { logInWithCode, logInWithPassword, requestLoginCode } from "@/lib/auth"
+import {
+  confirmTwoStep,
+  logInWithCode,
+  logInWithPassword,
+  requestLoginCode,
+} from "@/lib/auth"
 
 vi.mock("@/lib/auth", () => ({
   logInWithPassword: vi.fn(),
   requestLoginCode: vi.fn(),
   logInWithCode: vi.fn(),
+  confirmTwoStep: vi.fn(),
 }))
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
@@ -24,7 +30,9 @@ describe("admin LoginForm", () => {
   beforeEach(() => vi.clearAllMocks())
 
   it("logs in with email and password", async () => {
-    vi.mocked(logInWithPassword).mockResolvedValue({ ...admin, isSuperAdmin: true })
+    vi.mocked(logInWithPassword).mockResolvedValue({
+      admin: { ...admin, isSuperAdmin: true },
+    })
     const onLoggedIn = vi.fn()
     const user = userEvent.setup()
     render(<LoginForm onLoggedIn={onLoggedIn} />)
@@ -35,6 +43,31 @@ describe("admin LoginForm", () => {
 
     await waitFor(() => expect(onLoggedIn).toHaveBeenCalled())
     expect(logInWithPassword).toHaveBeenCalledWith("sam@marketbase.test", "secret")
+  })
+
+  it("asks for the emailed code when two-step login applies (FRD-01 ADM-003)", async () => {
+    vi.mocked(logInWithPassword).mockResolvedValue({
+      twoStep: {
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
+        resendAfter: new Date(Date.now() + 30_000).toISOString(),
+        debugCode: "246810",
+      },
+    })
+    vi.mocked(confirmTwoStep).mockResolvedValue(admin)
+    const onLoggedIn = vi.fn()
+    const user = userEvent.setup()
+    render(<LoginForm onLoggedIn={onLoggedIn} />)
+
+    await user.type(screen.getByLabelText("Email"), "sam@marketbase.test")
+    await user.type(screen.getByLabelText("Password", { selector: "input" }), "secret")
+    await user.click(screen.getByRole("button", { name: "Log in" }))
+
+    expect(await screen.findByText(/Two-step login/)).toBeInTheDocument()
+    expect(onLoggedIn).not.toHaveBeenCalled()
+    await user.type(screen.getByLabelText("Code"), "246810")
+    await user.click(screen.getByRole("button", { name: "Log in" }))
+    await waitFor(() => expect(onLoggedIn).toHaveBeenCalledWith(admin))
+    expect(confirmTwoStep).toHaveBeenCalledWith("sam@marketbase.test", "246810")
   })
 
   it("shows the backend's refusal", async () => {

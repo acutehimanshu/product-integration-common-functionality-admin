@@ -16,7 +16,12 @@ import {
   TabsTrigger,
 } from "@acutehimanshu/ui/components/ui/tabs"
 import { getErrorMessage } from "@/lib/api"
-import { logInWithCode, logInWithPassword, requestLoginCode } from "@/lib/auth"
+import {
+  logInWithCode,
+  confirmTwoStep,
+  logInWithPassword,
+  requestLoginCode,
+} from "@/lib/auth"
 
 // Admin login, two ways side by side (tabs): email + password, or email +
 // a one-time code (no password yet, or forgot it). The email typed in one
@@ -87,14 +92,30 @@ function PasswordForm({
   })
   useReportEmail(form, onEmailChange)
   const { errors, isSubmitting } = form.formState
+  // Two-step login: the password was right; the emailed code finishes it.
+  const [twoStep, setTwoStep] = useState<{ email: string; debugCode?: string } | null>(
+    null
+  )
 
   const onSubmit = form.handleSubmit(async ({ email, password }) => {
     try {
-      onLoggedIn(await logInWithPassword(email, password))
+      const result = await logInWithPassword(email, password)
+      if ("admin" in result) onLoggedIn(result.admin)
+      else setTwoStep({ email, debugCode: result.twoStep.debugCode })
     } catch (error) {
       form.setError("root", { message: getErrorMessage(error, "Couldn't log you in") })
     }
   })
+
+  if (twoStep)
+    return (
+      <TwoStepForm
+        email={twoStep.email}
+        debugCode={twoStep.debugCode}
+        onLoggedIn={onLoggedIn}
+        onBack={() => setTwoStep(null)}
+      />
+    )
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-3" noValidate>
@@ -126,6 +147,73 @@ function PasswordForm({
       <FieldError id="login-error" message={errors.root?.message} />
       <Button type="submit" disabled={isSubmitting}>
         {isSubmitting ? "Logging in..." : "Log in"}
+      </Button>
+    </form>
+  )
+}
+
+/** Second step of a two-step login (FRD-01 ADM-003): the code we just emailed. */
+function TwoStepForm({
+  email,
+  debugCode,
+  onLoggedIn,
+  onBack,
+}: Readonly<{
+  email: string
+  debugCode?: string
+  onLoggedIn: (admin: AdminMe) => void
+  onBack: () => void
+}>) {
+  const form = useForm<z.infer<typeof codeSchema>>({
+    resolver: zodResolver(codeSchema),
+    defaultValues: { code: "" },
+  })
+  const { errors, isSubmitting } = form.formState
+  const onSubmit = form.handleSubmit(async ({ code }) => {
+    try {
+      onLoggedIn(await confirmTwoStep(email, code))
+    } catch (error) {
+      form.setError("root", { message: getErrorMessage(error, "Couldn't log you in") })
+    }
+  })
+  return (
+    <form onSubmit={onSubmit} className="flex flex-col gap-3" noValidate>
+      <Text>
+        Two-step login: we&apos;ve emailed <span className="font-medium">{email}</span> a
+        6-digit code.
+      </Text>
+      {debugCode && (
+        <Text variant="muted" className="text-xs" role="note">
+          Test mode — your code is <span className="font-mono">{debugCode}</span>
+        </Text>
+      )}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="two-step-code">Code</Label>
+        <Input
+          id="two-step-code"
+          type="text"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          maxLength={6}
+          autoFocus
+          aria-invalid={!!errors.code}
+          aria-describedby={errors.code ? "two-step-code-error" : undefined}
+          {...form.register("code")}
+        />
+        <FieldError id="two-step-code-error" message={errors.code?.message} />
+      </div>
+      <FieldError id="two-step-error" message={errors.root?.message} />
+      <Button type="submit" disabled={isSubmitting}>
+        {isSubmitting ? "Logging in..." : "Log in"}
+      </Button>
+      <Button
+        type="button"
+        variant="link"
+        size="sm"
+        className="text-foreground self-start px-0"
+        onClick={onBack}
+      >
+        Start again
       </Button>
     </form>
   )

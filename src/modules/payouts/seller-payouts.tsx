@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, useParams } from "react-router"
 import { toast } from "sonner"
 import type { AdminPayoutDetail } from "@acutehimanshu/core/domain/admin-payouts"
+import { PAYOUT_STATUS_LABELS } from "@acutehimanshu/core/domain/seller"
 import { formatMoney } from "@acutehimanshu/core/money"
 import { PageContainer } from "@acutehimanshu/ui/components/page-container"
 import { Heading } from "@acutehimanshu/ui/components/heading"
@@ -21,7 +22,7 @@ import {
 import { AuditHistory } from "@/components/audit-history"
 import { InternalNotes } from "@/components/internal-notes"
 import { ReasonDialog } from "@/components/reason-dialog"
-import { getErrorMessage } from "@/lib/api"
+import { api, getErrorMessage } from "@/lib/api"
 import { formatDateTime } from "@/lib/format"
 import { usePageTitle } from "@/lib/use-page-title"
 import {
@@ -30,8 +31,6 @@ import {
   payoutKeys,
   releasePayouts,
 } from "@/modules/payouts/api"
-
-const LINE_STATUS = { pending: "Pending", paid: "Paid", cancelled: "Not paid" }
 
 export function SellerPayouts() {
   const { sellerId = "" } = useParams()
@@ -159,8 +158,27 @@ export function SellerPayouts() {
                       <TableCell className="text-right">
                         {formatMoney(line.payout)}
                         <span className="text-muted-foreground block text-xs">
-                          {LINE_STATUS[line.status]}
+                          {PAYOUT_STATUS_LABELS[line.status]}
+                          {line.failure && ` — ${line.failure}`}
                         </span>
+                        {line.status === "failed" && (
+                          <ReasonDialog
+                            trigger="Retry"
+                            triggerLabel={`Retry the payout for ${line.orderId}`}
+                            title="Send this payout again?"
+                            description="It uses the same reference, so it can't be paid twice."
+                            confirmLabel="Retry"
+                            onConfirm={async (reason) =>
+                              saved(
+                                await api.post<AdminPayoutDetail>(
+                                  `/admin/payouts/${encodeURIComponent(sellerId)}/orders/${encodeURIComponent(line.orderId)}/retry`,
+                                  { reason }
+                                ),
+                                "Payout sent again"
+                              )
+                            }
+                          />
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

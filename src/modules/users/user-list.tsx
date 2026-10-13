@@ -17,6 +17,7 @@ import { FilterTabs } from "@/components/filter-tabs"
 import { Pager } from "@/components/pager"
 import { SearchBox } from "@/components/search-box"
 import { getErrorMessage } from "@/lib/api"
+import { ACCOUNT_STATUS_LABELS } from "@acutehimanshu/core/domain/admin-users"
 import { formatDateTime } from "@/lib/format"
 import { usePageTitle } from "@/lib/use-page-title"
 import { listUsers, userKeys, type UserFilter } from "@/modules/users/api"
@@ -25,7 +26,9 @@ import { CsvButton, exportQuery } from "@/components/csv-button"
 const FILTERS: Array<{ value: UserFilter["status"]; label: string }> = [
   { value: "all", label: "All" },
   { value: "active", label: "Active" },
+  { value: "pending", label: "Pending" },
   { value: "suspended", label: "Suspended" },
+  { value: "closed", label: "Closed" },
 ]
 
 export function UserList() {
@@ -82,9 +85,12 @@ export function UserList() {
                     <Link to={user.id} className="font-medium hover:underline">
                       {user.name ?? user.email ?? user.phone ?? user.id}
                     </Link>
-                    {user.status === "suspended" && (
-                      <Badge variant="destructive" className="ml-2">
-                        Suspended
+                    {user.status !== "active" && (
+                      <Badge
+                        variant={user.status === "suspended" ? "destructive" : "outline"}
+                        className="ml-2"
+                      >
+                        {ACCOUNT_STATUS_LABELS[user.status]}
                       </Badge>
                     )}
                     <span className="text-muted-foreground block text-xs">

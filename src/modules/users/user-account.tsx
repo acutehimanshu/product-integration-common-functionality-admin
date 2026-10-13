@@ -2,7 +2,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, useParams } from "react-router"
 import { toast } from "sonner"
 import { VERIFICATION_STATUS_LABELS } from "@acutehimanshu/core/domain/seller"
-import type { AdminUserDetail } from "@acutehimanshu/core/domain/admin-users"
+import {
+  ACCOUNT_STATUS_LABELS,
+  type AdminUserDetail,
+} from "@acutehimanshu/core/domain/admin-users"
 import { formatMoney } from "@acutehimanshu/core/money"
 import { PageContainer } from "@acutehimanshu/ui/components/page-container"
 import { Heading } from "@acutehimanshu/ui/components/heading"
@@ -19,7 +22,14 @@ import { useAdmin } from "@/lib/auth"
 import { canUseModule } from "@/modules"
 import { formatDateTime } from "@/lib/format"
 import { usePageTitle } from "@/lib/use-page-title"
-import { getUser, restoreUser, suspendUser, userKeys } from "@/modules/users/api"
+import {
+  getUser,
+  restoreSelling,
+  restoreUser,
+  suspendSelling,
+  suspendUser,
+  userKeys,
+} from "@/modules/users/api"
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -70,11 +80,9 @@ export function UserAccount() {
         <>
           <div className="flex flex-wrap items-center gap-2">
             <Heading>{displayName}</Heading>
-            {user.status === "suspended" ? (
-              <Badge variant="destructive">Suspended</Badge>
-            ) : (
-              <Badge variant="outline">Active</Badge>
-            )}
+            <Badge variant={user.status === "suspended" ? "destructive" : "outline"}>
+              {ACCOUNT_STATUS_LABELS[user.status]}
+            </Badge>
           </div>
           {user.suspension && (
             <Text variant="muted">
@@ -83,7 +91,7 @@ export function UserAccount() {
           )}
 
           <div className="flex flex-wrap gap-2">
-            {user.status === "active" ? (
+            {user.status !== "closed" && user.status !== "suspended" && (
               <ReasonDialog
                 trigger="Suspend account"
                 triggerVariant="destructive"
@@ -96,7 +104,8 @@ export function UserAccount() {
                   saved(await suspendUser(id, { reason, note }), "Account suspended")
                 }
               />
-            ) : (
+            )}
+            {user.status === "suspended" && (
               <ReasonDialog
                 trigger="Restore account"
                 title={`Restore ${displayName}?`}
@@ -122,6 +131,21 @@ export function UserAccount() {
                   <Row label="Phone">{user.phone ?? "—"}</Row>
                   <Row label="Country">{user.country ?? "—"}</Row>
                   <Row label="Joined">{formatDateTime(user.createdAt)}</Row>
+                  <Row label="Terms & privacy">
+                    {user.consents.legal.length === 0
+                      ? "Not accepted"
+                      : user.consents.legal
+                          .map((c) => `${c.page} v${c.version} (${formatDateTime(c.at)})`)
+                          .join(", ")}
+                    {user.consents.legal.length > 0 &&
+                      !user.consents.legalCurrent &&
+                      " — a newer version is waiting"}
+                  </Row>
+                  <Row label="Marketing">
+                    {user.consents.marketing
+                      ? marketingLine(user.consents.marketing)
+                      : "Never asked"}
+                  </Row>
                   <Row label="Account ID">
                     <span className="font-mono">{user.id}</span>
                   </Row>
@@ -145,9 +169,45 @@ export function UserAccount() {
                       {user.seller.activeListings} on sale of {user.seller.listings}
                     </Row>
                     <Row label="Sales">{user.seller.sales}</Row>
+                    <Row label="Selling">
+                      {user.seller.sellingSuspension
+                        ? `Paused ${formatDateTime(user.seller.sellingSuspension.at)}: “${user.seller.sellingSuspension.reason}”`
+                        : "Allowed"}
+                    </Row>
                   </dl>
                 ) : (
                   <Text variant="muted">Hasn&apos;t started selling.</Text>
+                )}
+                {user.seller && user.status === "active" && (
+                  <div className="mt-3">
+                    {user.seller.sellingSuspension ? (
+                      <ReasonDialog
+                        trigger="Restore selling"
+                        title={`Restore selling for ${displayName}?`}
+                        description="Their listings go back on sale and they can publish and quote again."
+                        confirmLabel="Restore selling"
+                        onConfirm={async (reason) =>
+                          saved(await restoreSelling(id, reason), "Selling restored")
+                        }
+                      />
+                    ) : (
+                      <ReasonDialog
+                        trigger="Pause selling"
+                        triggerVariant="destructive"
+                        title={`Pause selling for ${displayName}?`}
+                        description="Their listings can't be bought and they can't publish or quote. They can still log in and buy, and orders already placed carry on."
+                        confirmLabel="Pause selling"
+                        destructive
+                        noteRequired
+                        onConfirm={async (reason, note = "") =>
+                          saved(
+                            await suspendSelling(id, { reason, note }),
+                            "Selling paused"
+                          )
+                        }
+                      />
+                    )}
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -192,4 +252,9 @@ export function UserAccount() {
       )}
     </PageContainer>
   )
+}
+
+function marketingLine(choice: { granted: boolean; at: string }): string {
+  const what = choice.granted ? "Opted in" : "Opted out"
+  return `${what} ${formatDateTime(choice.at)}`
 }

@@ -20,6 +20,8 @@ import { HomeEditor } from "@/modules/content/home-editor"
 import { BlogEditor, BlogList } from "@/modules/content/blog"
 import { HelpEditor } from "@/modules/content/help-editor"
 import { SeoEditor } from "@/modules/content/seo-editor"
+import { PageEditor, PageList, SharedBlocks } from "@/modules/content/pages-cms"
+import { Marketing } from "@/modules/content/marketing"
 
 const contentKeys = {
   all: ["admin", "content"] as const,
@@ -31,6 +33,16 @@ const SITE_PAGES = [
   { to: "home", title: "Home page", about: "Banners, sections, category tiles" },
   { to: "footer", title: "Footer", about: "Link columns, social media" },
   { to: "blog", title: "Blog", about: "Posts, drafts, publishing" },
+  {
+    to: "pages",
+    title: "Pages",
+    about: "Information, landing and legal pages; versions, approval",
+  },
+  {
+    to: "marketing",
+    title: "Marketing",
+    about: "Service requests, campaigns and placements, marketing email",
+  },
   { to: "help", title: "Help centre", about: "Topics, questions and answers" },
   { to: "seo", title: "Search & sharing", about: "Titles, descriptions, share images" },
 ]
@@ -234,6 +246,10 @@ export default function ContentPage() {
       <Route path="seo" element={<SeoEditor />} />
       <Route path="blog" element={<BlogList />} />
       <Route path="blog/:id" element={<BlogEditor />} />
+      <Route path="pages" element={<PageList />} />
+      <Route path="pages/:id" element={<PageEditor />} />
+      <Route path="shared-blocks" element={<SharedBlocks />} />
+      <Route path="marketing/*" element={<Marketing />} />
       <Route path=":slug" element={<LegalPageEditor />} />
     </Routes>
   )

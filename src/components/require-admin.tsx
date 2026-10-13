@@ -27,5 +27,8 @@ export function RequireAdmin({ children }: { children: React.ReactNode }) {
       />
     )
   }
+  // Two-step applies and they came in with a code alone: set a password first.
+  if (admin.setupOnly && location.pathname !== "/account")
+    return <Navigate to="/account" replace />
   return children
 }

@@ -39,6 +39,12 @@ export function MyAccount() {
         currentPassword: current || undefined,
         newPassword: next,
       })
+      if (admin.setupOnly) {
+        // The backend ended this session: log in with the password and a code.
+        queryClient.setQueryData(adminKeys.me(), null)
+        toast.success("Password saved — log in with it and the code we email you")
+        return
+      }
       queryClient.setQueryData(adminKeys.me(), { ...admin, hasPassword: true })
       setCurrent("")
       setNext("")
@@ -68,13 +74,19 @@ export function MyAccount() {
         <Heading as="h2" size="h3">
           {admin.hasPassword ? "Change your password" : "Set a password"}
         </Heading>
-        {!admin.hasPassword && (
+        {admin.setupOnly && (
+          <Text role="status" className="bg-muted rounded-xl p-3">
+            Two-step login is on for you. Set a password here; then you&apos;ll log in
+            with it and a code we email you.
+          </Text>
+        )}
+        {!admin.hasPassword && !admin.setupOnly && (
           <Text variant="muted">
             You log in with one-time codes today. A password lets you use the Password tab
             too.
           </Text>
         )}
-        {admin.hasPassword && (
+        {admin.hasPassword && !admin.setupOnly && (
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="current-password">Current password</Label>
             <Input

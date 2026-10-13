@@ -24,6 +24,8 @@ import { formatDateTime } from "@/lib/format"
 import { usePageTitle } from "@/lib/use-page-title"
 import { listOrders, orderKeys, type OrderFilter } from "@/modules/orders/api"
 import { CsvButton, exportQuery } from "@/components/csv-button"
+import { SubNav } from "@/components/sub-nav"
+import { ORDER_TABS } from "@/modules/orders/reconcile-queue"
 
 const FILTERS: Array<{ value: AdminOrderFilter; label: string }> = [
   { value: "all", label: "All" },
@@ -59,6 +61,7 @@ export function OrderList() {
         </div>
         <Text variant="muted">Every order on the marketplace, newest first.</Text>
       </div>
+      <SubNav tabs={ORDER_TABS} label="Orders" />
       <FilterTabs param="status" options={FILTERS} label="Filter orders" />
       <SearchBox label="Search orders" placeholder="Order ID, buyer or shop" />
 

@@ -32,15 +32,19 @@ export function useAdmin() {
   })
 }
 
-export async function logInWithPassword(
+/** The admin, or — when two-step login applies — the emailed-code step to finish. */
+export function logInWithPassword(
   email: string,
   password: string
-): Promise<AdminMe> {
-  const { admin } = await api.post<AdminLoginResult>("/admin/auth/login", {
-    email,
-    password,
-  })
-  return admin
+): Promise<AdminLoginResult> {
+  return api.post<AdminLoginResult>("/admin/auth/login", { email, password })
+}
+
+/** Two-step login, second step: the code emailed after the password. */
+export async function confirmTwoStep(email: string, code: string): Promise<AdminMe> {
+  const result = await api.post<AdminLoginResult>("/admin/auth/two-step", { email, code })
+  if (!("admin" in result)) throw new Error("Couldn't log you in")
+  return result.admin
 }
 
 export function requestLoginCode(email: string): Promise<OtpRequestResult> {
@@ -48,11 +52,12 @@ export function requestLoginCode(email: string): Promise<OtpRequestResult> {
 }
 
 export async function logInWithCode(email: string, code: string): Promise<AdminMe> {
-  const { admin } = await api.post<AdminLoginResult>("/admin/auth/otp/verify", {
+  const result = await api.post<AdminLoginResult>("/admin/auth/otp/verify", {
     email,
     code,
   })
-  return admin
+  if (!("admin" in result)) throw new Error("Couldn't log you in")
+  return result.admin
 }
 
 export function logOut(): Promise<void> {

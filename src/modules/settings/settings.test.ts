@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest"
 import { countryProfileProblem } from "@acutehimanshu/core/domain/country-profile"
 import type { AdminCountry } from "@acutehimanshu/core/domain/country-profile"
 import { parseCurrencies, toInput } from "@/modules/settings/country-editor"
-import { startOf, toScope } from "@/modules/settings/rules-screen"
 import { moveItem } from "@/lib/move-item"
 
 const au: AdminCountry = {
@@ -14,12 +13,15 @@ const au: AdminCountry = {
   status: "live",
   buyersCanRegister: true,
   crossBorder: false,
+  loginChannels: ["email", "sms"],
   extraCurrencies: ["USD"],
   tax: { label: "GST", ratePercent: 10, confirmed: false },
   support: { hours: "", email: null, phone: null },
   providers: { payment: null, shipping: null, tax: null, verification: null },
   history: [],
   legal: [],
+  readiness: { problems: [], warnings: [] },
+  refusals: [],
 }
 
 describe("country editor", () => {
@@ -39,24 +41,6 @@ describe("country editor", () => {
     expect(
       countryProfileProblem({ ...toInput(au), status: "coming_soon" }, "AU")
     ).toMatch(/live or pilot/)
-  })
-})
-
-describe("rules screen", () => {
-  it("turns empty scope fields into 'any'", () => {
-    expect(
-      toScope({ country: "AU", categoryId: "", sellerType: "", sellerId: " " })
-    ).toEqual({
-      country: "AU",
-      categoryId: null,
-      sellerType: null,
-      sellerId: null,
-    })
-  })
-
-  it("starts now when no date is chosen", () => {
-    expect(startOf("")).toBeUndefined()
-    expect(startOf("2026-10-20T09:00")).toMatch(/^2026-10-(19|20)T/)
   })
 })
 

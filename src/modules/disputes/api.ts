@@ -7,7 +7,13 @@ import type {
 } from "@acutehimanshu/core/domain/admin-disputes"
 import { api } from "@/lib/api"
 
-export type DisputeListFilter = { status: DisputeFilter; q: string; page: number }
+export type DisputeListFilter = {
+  status: DisputeFilter
+  q: string
+  page: number
+  /** "me": only cases assigned to this admin (FRD-07 DSP-047). */
+  assignee?: "me"
+}
 
 export const disputeKeys = {
   all: ["admin", "disputes"] as const,
@@ -21,6 +27,7 @@ export function listDisputes(
 ): Promise<Page<DisputeRow>> {
   const params = new URLSearchParams({ status: filter.status, page: String(filter.page) })
   if (filter.q) params.set("q", filter.q)
+  if (filter.assignee) params.set("assignee", filter.assignee)
   return api.get(`/admin/disputes?${params}`, options)
 }
 

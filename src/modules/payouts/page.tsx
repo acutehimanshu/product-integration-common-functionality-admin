@@ -1,5 +1,6 @@
 import { Route, Routes } from "react-router"
 import { Ledger } from "@/modules/payouts/ledger"
+import { Reconciliation } from "@/modules/payouts/reconciliation"
 import { PayoutList } from "@/modules/payouts/payout-list"
 import { SellerPayouts } from "@/modules/payouts/seller-payouts"
 
@@ -9,6 +10,7 @@ export default function PayoutsPage() {
     <Routes>
       <Route index element={<PayoutList />} />
       <Route path="ledger" element={<Ledger />} />
+      <Route path="reconciliation" element={<Reconciliation />} />
       <Route path=":sellerId" element={<SellerPayouts />} />
     </Routes>
   )

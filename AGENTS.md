@@ -324,6 +324,12 @@ the basecode repo until a real Marketbase feature replaces the reference
   (`apps/mock-api/src/rules.ts`) — never read `db.settings.limits` directly
   for a buyer's or seller's value. Never hard-code these numbers in a
   component.
+  **Rule governance (FRD-02):** rules have a `priority` and a state (draft →
+  pending approval when `AdminSecurity.rulesNeedApproval` → published /
+  disabled); only published rules apply, and an exact tie is refused
+  (`ruleConflict`). Calendar dates start at midnight in the scope country's
+  zone (`startOfDateInZone`). Rules is its own admin module and section
+  (`/rules`), so a sub-admin can author and another admin approve.
 - **Payments** (batch 15, admin › Settings › Payments): any number of
   gateways, ordered per country. Adapters live in `packages/payments`
   (`stripeConnect`, `testGateway()`, `createCheckoutWithFailover`,
@@ -338,6 +344,12 @@ the basecode repo until a real Marketbase feature replaces the reference
   `MOCK_SEND_REAL=1`; a Test gateway is the default. Refunds
   (`refundThroughGateway`) and seller transfers (`transferToSeller`, when the
   ledger pays out) go through the order's gateway.
+  **Every money move carries an idempotency key** (FRD-00 MST-018,
+  `MoneyMove`): made from what the money is for (`refund:<orderId>`,
+  `payout:<orderId>`, `charge:<ref>`), never random, and sent to the gateway
+  (Stripe `Idempotency-Key`). Run moves through `retryMoneyMove`, which
+  retries only unknown/temporary outcomes under the same key — the gateway
+  answers a repeat with the first result, so nothing moves twice.
 - **Email and SMS** (batch 20, admin › Settings › Messaging): any number of
   providers per channel, ordered globally and per country, with fallback.
   Adapters live in `packages/messaging` (plain TypeScript, no SDKs, `fetch`
@@ -351,6 +363,29 @@ the basecode repo until a real Marketbase feature replaces the reference
   `MOCK_SEND_REAL=1`, and a Test outbox catches everything by default. Tests
   never send for real: adapter tests use a fake fetch; mock tests await
   `flushDeliveries()`.
+- **Uploads** (FRD-01 FILE-001/002): every kind is in `UPLOAD_KINDS`
+  (`@acutehimanshu/core/domain/uploads`: types, size, public/private); the mock
+  stores them through `storeUpload(kind, file, ownerId)` (`apps/mock-api/src/files.ts`).
+  Public files get `/uploads/{id}`; **private ones (evidence, verification
+  documents) never do** — records store `file:<id>` references and hand out
+  fresh signed `/files/{id}` links (`fileLinks`) only to people allowed to see
+  the record. A new kind = a registry entry; a new private attachment = check
+  ownership with `privateFileRef`. Storage and social sign-in sit behind
+  `FileStorage` and `IdentityProvider` adapters (`packages/integrations`).
+- **Integration contracts** (FRD-00 MST-022/024, `packages/integrations`):
+  provider-neutral adapters, same shape as payments/messaging (settings +
+  write-only secrets, `fetch` passed in, `{ ok } | { ok: false, error,
+retryable }`, an `info` with capabilities): `shipping` (quote with expiry,
+  idempotent `book`, tracking mapped to `TrackingStatus`; `testCarrier`),
+  `verification` (ABN/DUNS/LEI lookup; `testRegistry`), `ratinghub` (publish /
+  withdraw keyed by review id + version, first name only; `testRatingHub`) and
+  `analytics` (`createCollector`: validates with `analyticsEventProblem`,
+  drops repeated `eventId`s, never throws, keeps events when the sink fails;
+  `memorySink`). Events use the `AnalyticsEvent` envelope
+  (`@acutehimanshu/core/domain/analytics`: eventId, schemaVersion, name, domain,
+  occurredAt, marketplace country, source; no personal data). A real partner =
+  a new adapter of the same shape; they get wired into the mock as their FRD
+  is built (FRD-06 shipping, FRD-03 verification, FRD-09 RatingHub/analytics).
 - **Ledger** (batch 19c, admin › Payouts › Ledger, finance): append-only money
   record (`@acutehimanshu/core/domain/ledger`). Each entry moves a positive amount
   between Marketbase's books; `totals.difference` is 0 when they balance. Never
@@ -374,6 +409,13 @@ the basecode repo until a real Marketbase feature replaces the reference
   (`/legal/{slug}?country=`, falling back to the global text; the buyer
   legal page renders per request in the viewer's country). `GET /countries`
   leaves out `off` countries; profile pickers list only `buyersCanRegister`.
+  **Active marketplace country** (FRD-00 MST-001,
+  `@acutehimanshu/core/domain/marketplace-country`): every visit runs under one —
+  the visitor's pick (footer `CountryPicker`, `marketplace_country` cookie,
+  shown once two countries are live/pilot), else their profile country, else
+  the first live country. Server Components that vary by country call
+  `getMarketplaceCountry()` (`@acutehimanshu/web/auth/marketplace-country`; it reads
+  cookies, so only where the content depends on it) — never `Me.country` alone.
 - **Admin portal** (`apps/admin`, :3400) — the Marketbase team's tool. **A
   plain React single-page app (Vite + React Router + TanStack Query), not
   Next.js**: no server, no SEO, builds to static files (`dist/`) served with

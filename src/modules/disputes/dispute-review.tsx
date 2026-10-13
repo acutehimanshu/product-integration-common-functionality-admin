@@ -1,3 +1,9 @@
+import {
+  RESOLUTION_LABELS,
+  RETURN_OUTCOME_LABELS,
+  SELLER_REJECTION_LABELS,
+} from "@acutehimanshu/core/domain/return-policy"
+import type { ProblemReport } from "@acutehimanshu/core/domain/returns"
 import { useId, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, useParams } from "react-router"
@@ -7,7 +13,13 @@ import {
   PROBLEM_REASON_LABELS,
   type DisputeDetail,
   type DisputeOutcome,
+  ESCALATED_LABELS,
+  DISPUTE_REASON_CODES,
+  DISPUTE_REASON_LABELS,
+  type DisputeReasonCode,
 } from "@acutehimanshu/core/domain/admin-disputes"
+import { NativeSelect } from "@acutehimanshu/ui/components/native-select"
+import { PendingDecision } from "@/modules/disputes/pending-decision"
 import {
   NOTE_MIN_LENGTH,
   noteProblem,
@@ -29,6 +41,7 @@ import { getErrorMessage } from "@/lib/api"
 import { formatDateTime } from "@/lib/format"
 import { usePageTitle } from "@/lib/use-page-title"
 import { InternalNotes } from "@/components/internal-notes"
+import { CaseHandling } from "@/modules/disputes/case-handling"
 import { useCanAct } from "@/components/module-access"
 import { ReasonDialog } from "@/components/reason-dialog"
 import {
@@ -65,6 +78,7 @@ function DecisionForm({
   const [outcome, setOutcome] = useState<DisputeOutcome | null>(null)
   const [refund, setRefund] = useState("")
   const [reason, setReason] = useState("")
+  const [reasonCode, setReasonCode] = useState<DisputeReasonCode | "">("")
   const [note, setNote] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isPending, setIsPending] = useState(false)
@@ -76,6 +90,7 @@ function DecisionForm({
     const amount = Number(refund)
     if (outcome === "partial_refund" && !(amount > 0))
       return setError("Enter the refund amount.")
+    if (!reasonCode) return setError("Choose the reason code.")
     if (reason.trim().length < REASON_MIN_LENGTH)
       return setError("Explain the decision — both sides see it.")
     const noteError = noteProblem(note)
@@ -88,6 +103,7 @@ function DecisionForm({
           outcome === "partial_refund"
             ? { amount: toMinorUnits(amount, currency), currency }
             : undefined,
+        reasonCode,
         reason: reason.trim(),
         note: note.trim(),
       })
@@ -101,7 +117,7 @@ function DecisionForm({
   }
 
   // View only: the decision isn't theirs to make (the backend refuses it too).
-  if (!canAct) return null
+  if (!canAct || detail.problem.pendingDecision) return null
   return (
     <form
       onSubmit={submit}
@@ -150,6 +166,21 @@ function DecisionForm({
         </div>
       )}
       <div className="flex flex-col gap-1.5">
+        <Label htmlFor={`${id}-code`}>Reason code</Label>
+        <NativeSelect
+          id={`${id}-code`}
+          value={reasonCode}
+          onChange={(event) => setReasonCode(event.target.value as DisputeReasonCode)}
+        >
+          <option value="">Choose…</option>
+          {DISPUTE_REASON_CODES.map((code) => (
+            <option key={code} value={code}>
+              {DISPUTE_REASON_LABELS[code]}
+            </option>
+          ))}
+        </NativeSelect>
+      </div>
+      <div className="flex flex-col gap-1.5">
         <Label htmlFor={`${id}-reason`}>Explain the decision</Label>
         <Textarea
           id={`${id}-reason`}
@@ -191,6 +222,40 @@ function DecisionForm({
   )
 }
 
+/** The return policy the case was opened under (FRD-07 ELG-003, ADM-074). */
+function PolicySnapshot({ problem }: Readonly<{ problem: ProblemReport }>) {
+  const policy = problem.policy
+  if (!policy) return null
+  return (
+    <section aria-labelledby="policy-heading" className="flex flex-col gap-1 text-sm">
+      <Heading as="h2" size="h3" id="policy-heading">
+        Return policy
+      </Heading>
+      <p>
+        {policy.ruleName} · {RETURN_OUTCOME_LABELS[policy.outcome]} · allows{" "}
+        {policy.resolutions.map((r) => RESOLUTION_LABELS[r].toLowerCase()).join(", ") ||
+          "nothing"}
+        {policy.maxRefundWithoutReturn !== null &&
+          ` · refund without return up to ${(policy.maxRefundWithoutReturn / 100).toFixed(2)}`}
+      </p>
+      {problem.refundStatus && <p>Refund: {problem.refundStatus}</p>}
+      {problem.returnAuthorization && (
+        <p>
+          Return {problem.returnAuthorization.reference}
+          {problem.returnAuthorization.shipment
+            ? ` · sent with ${problem.returnAuthorization.shipment.carrier} (${problem.returnAuthorization.shipment.trackingNumber}, ${problem.returnAuthorization.shipment.source})`
+            : " · not sent yet"}
+        </p>
+      )}
+      {problem.override && (
+        <p className="text-muted-foreground">
+          Opened outside the policy by {problem.override.by}: {problem.override.reason}
+        </p>
+      )}
+    </section>
+  )
+}
+
 export function DisputeReview() {
   const { id = "" } = useParams()
   const queryClient = useQueryClient()
@@ -219,13 +284,12 @@ export function DisputeReview() {
         <>
           <div className="flex flex-wrap items-center gap-2">
             <Heading>
-              {PROBLEM_REASON_LABELS[data.problem.reason]} — order {data.order.id}
+              {data.problem.reasonLabel ??
+                PROBLEM_REASON_LABELS[data.problem.reason] ??
+                data.problem.reason}{" "}
+              — order {data.order.id}
             </Heading>
-            <Badge variant="outline">
-              {data.escalatedBecause === "seller_rejected"
-                ? "Seller rejected"
-                : "Seller didn't reply"}
-            </Badge>
+            <Badge variant="outline">{ESCALATED_LABELS[data.escalatedBecause]}</Badge>
           </div>
           <Text variant="muted">
             {data.buyer.name ?? data.buyer.id} vs {data.order.seller.shopName} · reported{" "}
@@ -277,6 +341,8 @@ export function DisputeReview() {
                     {data.problem.sellerResponse.decision === "reject"
                       ? "Rejected"
                       : "Accepted"}
+                    {data.problem.sellerResponse.rejectionReason &&
+                      ` (${SELLER_REJECTION_LABELS[data.problem.sellerResponse.rejectionReason]})`}
                     {data.problem.sellerResponse.note &&
                       `: “${data.problem.sellerResponse.note}”`}
                   </p>
@@ -288,6 +354,8 @@ export function DisputeReview() {
               </CardContent>
             </Card>
           </div>
+
+          {data.problem.policy && <PolicySnapshot problem={data.problem} />}
 
           <section aria-labelledby="items-heading" className="flex flex-col gap-2">
             <Heading as="h2" size="h3" id="items-heading">
@@ -310,7 +378,8 @@ export function DisputeReview() {
                 ` (${formatMoney(data.problem.resolution.refund)})`}
               {data.problem.resolution.decidedBy === "seller" && " — by the seller"}
               {data.problem.resolution.note && ` — “${data.problem.resolution.note}”`}
-              {data.problem.status === "return_in_transit" &&
+              {(data.problem.status === "return_in_transit" ||
+                data.problem.status === "inspecting") &&
                 ". Waiting for the item to reach the seller; the refund goes out then."}
             </Text>
           ) : (
@@ -323,7 +392,8 @@ export function DisputeReview() {
             />
           )}
 
-          {data.problem.status === "return_in_transit" && (
+          {(data.problem.status === "return_in_transit" ||
+            data.problem.status === "inspecting") && (
             <div>
               <ReasonDialog
                 trigger="Mark return received"
@@ -342,6 +412,8 @@ export function DisputeReview() {
             </div>
           )}
 
+          <PendingDecision detail={data} />
+          <CaseHandling detail={data} />
           <InternalNotes kind="disputes" id={data.problem.id} />
           <AuditHistory entries={data.history} />
         </>

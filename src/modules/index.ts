@@ -23,6 +23,7 @@ import { settingsModule } from "@/modules/settings/module"
 import { adminsModule } from "@/modules/admins/module"
 import { activityModule } from "@/modules/activity/module"
 import { reportsModule } from "@/modules/reports/module"
+import { rulesModule } from "@/modules/rules/module"
 
 /**
  * The admin portal's modules — the one place to switch a screen on or off.
@@ -53,6 +54,7 @@ const switches: Record<AdminModuleId, boolean> = {
   admins: true,
   activity: true,
   reports: true,
+  rules: true,
 }
 
 const manifests: AdminModule[] = [
@@ -73,6 +75,7 @@ const manifests: AdminModule[] = [
   adminsModule,
   activityModule,
   reportsModule,
+  rulesModule,
 ]
 
 export const modules = createModuleRegistry<AdminModuleId>(manifests, {

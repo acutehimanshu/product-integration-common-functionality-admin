@@ -1,3 +1,10 @@
+import { PROVIDER_REGISTRY } from "@acutehimanshu/core/domain/providers"
+import {
+  COUNTRY_FEATURE_LABELS,
+  COUNTRY_FEATURES,
+  featureOn,
+  sellerTypesOf,
+} from "@acutehimanshu/core/types/address"
 import { useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, useParams } from "react-router"
@@ -8,6 +15,7 @@ import {
   COUNTRY_STATUS_LABELS,
   PROVIDER_SLOTS,
   PROVIDER_SLOT_LABELS,
+  LOGIN_CHANNEL_LABELS,
   countryProfileProblem,
   type AdminCountry,
   type CountryProfileInput,
@@ -24,6 +32,9 @@ import { Skeleton } from "@acutehimanshu/ui/components/ui/skeleton"
 import { AuditHistory } from "@/components/audit-history"
 import { ReasonDialog } from "@/components/reason-dialog"
 import { api, getErrorMessage } from "@/lib/api"
+import { formatDateTime } from "@/lib/format"
+import { ComplianceSignOffs } from "@/modules/settings/compliance-sign-offs"
+import { VerificationRequirements } from "@/modules/settings/verification-requirements"
 import { usePageTitle } from "@/lib/use-page-title"
 
 export const countryKey = (code: string) => ["admin", "countries", code] as const
@@ -35,6 +46,9 @@ export function toInput(country: AdminCountry): CountryProfileInput {
     buyersCanRegister: country.buyersCanRegister,
     sellingEnabled: country.sellingEnabled,
     crossBorder: country.crossBorder,
+    loginChannels: country.loginChannels,
+    features: country.features ?? {},
+    sellerTypes: sellerTypesOf(country),
     currency: country.currency,
     extraCurrencies: country.extraCurrencies,
     timeZone: country.timeZone,
@@ -101,6 +115,10 @@ function Editor({ country }: { country: AdminCountry }) {
   const [rate, setRate] = useState(
     country.tax.ratePercent === null ? "" : String(country.tax.ratePercent)
   )
+  const [duty, setDuty] = useState(() => {
+    const percent = country.customs ? country.customs.dutyPercent : 10
+    return percent === null ? "" : String(percent)
+  })
   const set = (change: Partial<CountryProfileInput>) =>
     setForm((f) => ({ ...f, ...change }))
   const zones = allTimeZones()
@@ -113,6 +131,10 @@ function Editor({ country }: { country: AdminCountry }) {
       ...form.tax,
       label: form.tax.label.trim(),
       ratePercent: rate.trim() === "" ? null : Number(rate),
+    },
+    customs: {
+      dutyPercent: duty.trim() === "" ? null : Number(duty),
+      source: country.customs?.source ?? "internal",
     },
     support: {
       hours: form.support.hours.trim(),
@@ -177,6 +199,54 @@ function Editor({ country }: { country: AdminCountry }) {
           checked={form.crossBorder}
           onChange={(on) => set({ crossBorder: on })}
         />
+        <fieldset className="flex flex-col gap-2">
+          <legend className="mb-1 text-sm font-medium">Who can sell here</legend>
+          {(["individual", "business"] as const).map((type) => {
+            const types = form.sellerTypes ?? ["individual", "business"]
+            return (
+              <Check
+                key={type}
+                label={type === "individual" ? "Individuals" : "Businesses"}
+                checked={types.includes(type)}
+                onChange={(on) =>
+                  set({
+                    sellerTypes: on ? [...types, type] : types.filter((x) => x !== type),
+                  })
+                }
+              />
+            )
+          })}
+        </fieldset>
+        <fieldset className="flex flex-col gap-2">
+          <legend className="mb-1 text-sm font-medium">
+            Features on in this country
+          </legend>
+          {COUNTRY_FEATURES.map((feature) => (
+            <Check
+              key={feature}
+              label={COUNTRY_FEATURE_LABELS[feature]}
+              checked={featureOn(form, feature)}
+              onChange={(on) => set({ features: { ...form.features, [feature]: on } })}
+            />
+          ))}
+        </fieldset>
+        <fieldset className="flex flex-col gap-2">
+          <legend className="mb-1 text-sm font-medium">Login codes go out by</legend>
+          {(["email", "sms"] as const).map((channel) => (
+            <Check
+              key={channel}
+              label={LOGIN_CHANNEL_LABELS[channel]}
+              checked={form.loginChannels.includes(channel)}
+              onChange={(on) =>
+                set({
+                  loginChannels: on
+                    ? [...form.loginChannels, channel]
+                    : form.loginChannels.filter((c) => c !== channel),
+                })
+              }
+            />
+          ))}
+        </fieldset>
       </section>
 
       <section aria-labelledby="country-money" className="flex flex-col gap-3">
@@ -214,7 +284,7 @@ function Editor({ country }: { country: AdminCountry }) {
           <Field
             id="country-tax-rate"
             label="Tax rate (%)"
-            hint="Empty = varies (worked out per order)."
+            hint="Empty = not set up: checkout here is refused until there is one."
           >
             <Input
               id="country-tax-rate"
@@ -224,6 +294,21 @@ function Editor({ country }: { country: AdminCountry }) {
               step="0.1"
               value={rate}
               onChange={(e) => setRate(e.target.value)}
+            />
+          </Field>
+          <Field
+            id="country-duty"
+            label="Import duties and taxes (%)"
+            hint="On orders delivered here from abroad. Empty = not set up (cross-border checkout refused)."
+          >
+            <Input
+              id="country-duty"
+              type="number"
+              min={0}
+              max={100}
+              step="0.1"
+              value={duty}
+              onChange={(e) => setDuty(e.target.value)}
             />
           </Field>
         </div>
@@ -276,7 +361,8 @@ function Editor({ country }: { country: AdminCountry }) {
           Partners
         </Heading>
         <Text variant="muted" className="text-sm">
-          Which partner handles each job here. Empty = not connected yet.
+          Which partner handles each job here, from the provider registry. Planned
+          partners can be chosen once their adapter is built.
         </Text>
         <div className="grid gap-3 sm:grid-cols-2">
           {PROVIDER_SLOTS.map((slot) => (
@@ -285,14 +371,27 @@ function Editor({ country }: { country: AdminCountry }) {
               id={`country-provider-${slot}`}
               label={PROVIDER_SLOT_LABELS[slot]}
             >
-              <Input
+              <NativeSelect
                 id={`country-provider-${slot}`}
                 value={form.providers[slot] ?? ""}
-                placeholder="Not connected"
                 onChange={(e) =>
-                  set({ providers: { ...form.providers, [slot]: e.target.value } })
+                  set({
+                    providers: { ...form.providers, [slot]: e.target.value || null },
+                  })
                 }
-              />
+              >
+                <option value="">Not connected</option>
+                {PROVIDER_REGISTRY[slot].map((provider) => (
+                  <option
+                    key={provider.id}
+                    value={provider.id}
+                    disabled={provider.status === "planned"}
+                  >
+                    {provider.name}
+                    {provider.status === "planned" ? " (planned)" : ""}
+                  </option>
+                ))}
+              </NativeSelect>
             </Field>
           ))}
         </div>
@@ -355,6 +454,69 @@ function Editor({ country }: { country: AdminCountry }) {
   )
 }
 
+/**
+ * What a country still needs (FRD-02 CFG-008): problems block it from being
+ * live or pilot; warnings don't. Plus recent actions refused for missing
+ * setup (CFG-031), so the team sees what customers ran into.
+ */
+function Readiness({ country }: Readonly<{ country: AdminCountry }>) {
+  const { problems, warnings } = country.readiness
+  return (
+    <section
+      aria-labelledby="country-readiness"
+      className="flex flex-col gap-2 rounded-xl border p-4"
+    >
+      <Heading as="h2" size="h3" id="country-readiness">
+        Readiness
+      </Heading>
+      {problems.length === 0 && (
+        <Text className="text-sm">
+          Ready: nothing blocks this country from being live or pilot.
+        </Text>
+      )}
+      {problems.length > 0 && (
+        <div role="alert" className="flex flex-col gap-1">
+          <Text className="text-destructive text-sm font-medium">
+            Blocks live or pilot:
+          </Text>
+          <ul className="list-disc pl-5 text-sm">
+            {problems.map((problem) => (
+              <li key={problem}>{problem}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {warnings.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <Text variant="muted" className="text-sm font-medium">
+            Worth fixing:
+          </Text>
+          <ul className="text-muted-foreground list-disc pl-5 text-sm">
+            {warnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {country.refusals.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <Text className="text-sm font-medium">
+            Recently refused because of missing setup:
+          </Text>
+          <ul className="text-sm" aria-label="Refused actions">
+            {country.refusals.map((refusal) => (
+              <li key={`${refusal.action}-${refusal.problem}`}>
+                {refusal.action} ({refusal.count}×, last {formatDateTime(refusal.at)}):{" "}
+                {refusal.problem}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  )
+}
+
 /** Settings › Countries › one country's profile (Country Master, BRD §9). */
 export function CountryEditor() {
   const { code = "" } = useParams()
@@ -381,7 +543,10 @@ export function CountryEditor() {
             <Heading>{data.name}</Heading>
             <Badge variant="outline">{COUNTRY_STATUS_LABELS[data.status]}</Badge>
           </div>
+          <Readiness country={data} />
+          <ComplianceSignOffs country={data} />
           <Editor key={data.history[0]?.id ?? "initial"} country={data} />
+          <VerificationRequirements code={data.code} />
           <AuditHistory entries={data.history} />
         </>
       )}

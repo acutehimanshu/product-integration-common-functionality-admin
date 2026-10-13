@@ -1,3 +1,6 @@
+import type { SupportedCountry } from "@acutehimanshu/core/types/address"
+import { NativeSelect } from "@acutehimanshu/ui/components/native-select"
+import { Label } from "@acutehimanshu/ui/components/ui/label"
 import { useQuery } from "@tanstack/react-query"
 import { Link, useSearchParams } from "react-router"
 import {
@@ -21,7 +24,7 @@ import {
 import { FilterTabs } from "@/components/filter-tabs"
 import { Pager } from "@/components/pager"
 import { SearchBox } from "@/components/search-box"
-import { getErrorMessage } from "@/lib/api"
+import { api, getErrorMessage } from "@/lib/api"
 import { timeAgo } from "@/lib/format"
 import { usePageTitle } from "@/lib/use-page-title"
 import { listSellers, sellerKeys } from "@/modules/sellers/api"
@@ -37,11 +40,26 @@ const FILTERS: Array<{ value: SellerReviewFilter; label: string }> = [
 
 export function SellerQueue() {
   usePageTitle("Seller verification")
-  const [params] = useSearchParams()
+  const [params, setParams] = useSearchParams()
   const status = FILTERS.find((f) => f.value === params.get("status"))?.value ?? "pending"
   const q = params.get("q") ?? ""
   const page = Number(params.get("page")) || 1
-  const filter = { status, q, page }
+  // Country and seller type (FRD-03 03-044), kept in the URL like the rest.
+  const country = params.get("country") ?? ""
+  const type = params.get("type") ?? ""
+  const filter = { status, q, page, country, type }
+  const setFilter = (key: "country" | "type", value: string) =>
+    setParams((current) => {
+      const next = new URLSearchParams(current)
+      if (value) next.set(key, value)
+      else next.delete(key)
+      next.delete("page")
+      return next
+    })
+  const countries = useQuery({
+    queryKey: ["reference", "countries"],
+    queryFn: ({ signal }) => api.get<SupportedCountry[]>("/countries", { signal }),
+  })
 
   const { data, isPending, error } = useQuery({
     queryKey: sellerKeys.list(filter),
@@ -64,6 +82,35 @@ export function SellerQueue() {
       </div>
       <FilterTabs param="status" options={FILTERS} label="Filter sellers" />
       <SearchBox label="Search sellers" placeholder="Shop, owner, email or ID" />
+      <div className="flex flex-wrap gap-3">
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="sellers-country">Country</Label>
+          <NativeSelect
+            id="sellers-country"
+            value={country}
+            onChange={(e) => setFilter("country", e.target.value)}
+          >
+            <option value="">Any</option>
+            {(countries.data ?? []).map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.name}
+              </option>
+            ))}
+          </NativeSelect>
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="sellers-type">Seller type</Label>
+          <NativeSelect
+            id="sellers-type"
+            value={type}
+            onChange={(e) => setFilter("type", e.target.value)}
+          >
+            <option value="">Any</option>
+            <option value="individual">Individual</option>
+            <option value="business">Business</option>
+          </NativeSelect>
+        </div>
+      </div>
 
       {error ? (
         <Text role="alert" className="text-destructive">

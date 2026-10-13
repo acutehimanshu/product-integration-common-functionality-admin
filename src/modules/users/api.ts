@@ -1,13 +1,14 @@
 import type { BigActionInput } from "@acutehimanshu/core/domain/admin-audit"
 import type { Page } from "@acutehimanshu/core/types/page"
 import type {
+  AccountStatus,
   AdminUserDetail,
   AdminUserRow,
 } from "@acutehimanshu/core/domain/admin-users"
 import { api } from "@/lib/api"
 
 export type UserFilter = {
-  status: "all" | "active" | "suspended"
+  status: "all" | AccountStatus
   q: string
   page: number
 }
@@ -42,4 +43,19 @@ export function restoreUser(id: string, reason: string) {
   return api.post<AdminUserDetail>(`/admin/users/${encodeURIComponent(id)}/restore`, {
     reason,
   })
+}
+
+/** Pauses selling only — the account and buying carry on (big action). */
+export function suspendSelling(id: string, input: BigActionInput) {
+  return api.post<AdminUserDetail>(
+    `/admin/users/${encodeURIComponent(id)}/suspend-selling`,
+    input
+  )
+}
+
+export function restoreSelling(id: string, reason: string) {
+  return api.post<AdminUserDetail>(
+    `/admin/users/${encodeURIComponent(id)}/restore-selling`,
+    { reason }
+  )
 }

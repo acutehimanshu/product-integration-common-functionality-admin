@@ -11,6 +11,7 @@ import {
   type Plan,
   type PlanInput,
   type PlanSide,
+  type SupportTier,
 } from "@acutehimanshu/core/domain/subscriptions"
 
 // What the package and credit-pack forms hold (text, as typed) and how it
@@ -33,6 +34,9 @@ export type PlanDraft = {
   sellerBadge: boolean
   shopProfile: boolean
   customShopUrl: boolean
+  requiresVerification: boolean
+  relationshipManager: boolean
+  prioritySupport: boolean
   /** One bullet per line. */
   features: string
   trialDays: string
@@ -71,6 +75,9 @@ export function planToDraft(plan: Plan | null, side: PlanSide): PlanDraft {
     sellerBadge: plan?.perks.sellerBadge ?? false,
     shopProfile: plan?.perks.shopProfile ?? false,
     customShopUrl: plan?.perks.customShopUrl ?? false,
+    requiresVerification: plan?.perks.requiresVerification ?? false,
+    relationshipManager: plan?.perks.relationshipManager ?? false,
+    prioritySupport: plan?.perks.supportTier === "priority",
     features: (plan?.features ?? []).join("\n"),
     trialDays: String(plan?.trialDays ?? 0),
   }
@@ -176,6 +183,10 @@ function featuresOf(draft: PlanDraft): Checked<string[]> {
 }
 
 /** The form → PlanInput, or the first problem to show. */
+/** Seller packages only (FRD-03 03-029). */
+const supportTierOf = (draft: PlanDraft, side: PlanSide): SupportTier =>
+  side === "seller" && draft.prioritySupport ? "priority" : "standard"
+
 export function draftToPlan(
   draft: PlanDraft,
   side: PlanSide,
@@ -210,6 +221,9 @@ export function draftToPlan(
       sellerBadge: seller && draft.sellerBadge,
       shopProfile: seller && draft.shopProfile,
       customShopUrl: seller && draft.customShopUrl,
+      requiresVerification: seller && draft.requiresVerification,
+      relationshipManager: seller && draft.relationshipManager,
+      supportTier: supportTierOf(draft, side),
     },
     features: features.value,
     trialDays: isFree ? 0 : numbers.value.trialDays,

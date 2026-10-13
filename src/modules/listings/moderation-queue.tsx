@@ -21,6 +21,7 @@ import {
   type ModerationFilter,
 } from "@/modules/listings/api"
 import { CsvButton, exportQuery } from "@/components/csv-button"
+import { ModerationTabs } from "@/modules/listings/moderation-tabs"
 
 const FILTERS: Array<{ value: ModerationFilter["state"]; label: string }> = [
   { value: "open", label: "To review" },
@@ -56,6 +57,7 @@ export function ModerationQueue() {
           Listings reported by buyers or flagged by rules — most-reported first.
         </Text>
       </div>
+      <ModerationTabs />
       <FilterTabs param="state" options={FILTERS} label="Filter reports" />
       <SearchBox
         label="Search reported listings"
@@ -109,6 +111,9 @@ export function ModerationQueue() {
                       ))}
                       {item.reports.some((r) => r.source === "rule") && (
                         <Badge variant="secondary">Rule</Badge>
+                      )}
+                      {item.reports.some((r) => r.source === "category") && (
+                        <Badge variant="secondary">Check</Badge>
                       )}
                     </span>
                   </div>

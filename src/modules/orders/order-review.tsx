@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, useParams } from "react-router"
 import { toast } from "sonner"
 import { formatMoney } from "@acutehimanshu/core/money"
+import { ORDER_FINANCIAL_STATUS_LABELS } from "@acutehimanshu/core/domain/orders"
 import { PageContainer } from "@acutehimanshu/ui/components/page-container"
 import { Heading } from "@acutehimanshu/ui/components/heading"
 import { Text } from "@acutehimanshu/ui/components/text"
@@ -18,6 +19,8 @@ import { browserTimeZone, formatDateTime } from "@/lib/format"
 import { usePageTitle } from "@/lib/use-page-title"
 import { cancelOrder, getOrder, orderKeys } from "@/modules/orders/api"
 import { OrderRules } from "@/modules/orders/order-rules"
+import { OrderRefunds } from "@/modules/orders/order-refunds"
+import { OpenCase } from "@/modules/orders/open-case"
 
 const CANCELLED_BY = {
   buyer: "the buyer",
@@ -133,6 +136,11 @@ export function OrderReview() {
                   <Row label="Total">
                     <strong>{formatMoney(data.order.total)}</strong>
                   </Row>
+                  <Row label="Payment">
+                    {ORDER_FINANCIAL_STATUS_LABELS[data.order.financialStatus]}
+                    {data.order.refunded &&
+                      ` — ${formatMoney(data.order.refunded)} back to the buyer`}
+                  </Row>
                 </dl>
               </CardContent>
             </Card>
@@ -178,6 +186,10 @@ export function OrderReview() {
           </section>
 
           <OrderRules id={id} rules={data.rules} />
+          <OrderRefunds orderId={id} refunds={data.order.refunds ?? []} />
+          <div>
+            <OpenCase order={data.order} />
+          </div>
           <InternalNotes kind="orders" id={id} />
           <AuditHistory entries={data.history} />
         </>

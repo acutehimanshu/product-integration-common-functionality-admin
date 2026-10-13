@@ -18,6 +18,9 @@ import { Card, CardContent, CardHeader } from "@acutehimanshu/ui/components/ui/c
 import { Skeleton } from "@acutehimanshu/ui/components/ui/skeleton"
 import { AuditHistory } from "@/components/audit-history"
 import { InternalNotes } from "@/components/internal-notes"
+import { VerificationCase } from "@/modules/sellers/verification-case"
+import { SellerMarkets } from "@/modules/sellers/seller-markets"
+import { SellerRelationshipManager } from "@/modules/sellers/seller-relationship-manager"
 import { ReasonDialog } from "@/components/reason-dialog"
 import { getErrorMessage } from "@/lib/api"
 import { formatDateTime } from "@/lib/format"
@@ -133,6 +136,19 @@ export function SellerReview() {
               noteRequired
               onConfirm={decide("reject")}
             />
+            {seller.verification.status === "verified" && (
+              <ReasonDialog
+                trigger="Suspend verification"
+                triggerVariant="destructive"
+                title={`Suspend ${seller.shopName}'s verification?`}
+                description="Their verified status and payouts stop until a new submission is approved. Their listings stay up."
+                reasonHint="The seller sees this."
+                confirmLabel="Suspend verification"
+                destructive
+                noteRequired
+                onConfirm={decide("suspend")}
+              />
+            )}
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -196,6 +212,9 @@ export function SellerReview() {
             </Card>
           </div>
 
+          <VerificationCase value={seller.verificationCase} />
+          <SellerMarkets seller={seller} />
+          <SellerRelationshipManager seller={seller} />
           <InternalNotes kind="sellers" id={id} />
           <AuditHistory entries={seller.history} />
         </>
