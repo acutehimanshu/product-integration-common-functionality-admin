@@ -182,6 +182,19 @@ the basecode repo until a real Marketbase feature replaces the reference
   keys in `SEO_PAGES`) so the team's title, description and share image
   replace the page's own. A new fixed public page gets a `SEO_PAGES` entry
   and `withSeo`. The sitemap lists every shop with something on sale.
+- **Landing page and shop home** (buyer `landing` module, admin › Content ›
+  Landing page; `@acutehimanshu/core/domain/landing`): guests see the landing page
+  at `/`; a visitor with a session cookie (and everyone when the module is
+  off) is redirected to the shopping home at `/home` (the old home page,
+  still admin › Content › Shop home page). Links that mean "go shopping" use
+  `/home`; the logo stays `/`. The page is ten fixed sections; Phase 1 shows
+  the built-in `DEFAULT_LANDING` until an admin switches `source` to their
+  published version (drafts, versions, approval and restore in admin). The
+  `/` page fetches the live parts (categories, promoted then trending
+  listings, help questions) and passes them in. The newsletter signup is
+  double opt-in; `/newsletter/confirm` waits for a click so a mail scanner
+  opening the link can't confirm it. `/shop/{slug}` stays the custom shop
+  address.
 - **Blog** (buyer `blog` module, admin › Content › Blog): posts are plain
   text rendered by `blogBlocks` (`@acutehimanshu/core/domain/blog`) — never HTML.
   `/blog` and `sitemap.ts` read the backend per request so a new post shows

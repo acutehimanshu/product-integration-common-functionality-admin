@@ -111,6 +111,6 @@ describe("search & sharing checks", () => {
       seoProblem({
         home: { title: null, description: null, image: "http://x.test/a.png" },
       })
-    ).toMatch(/Home page/)
+    ).toMatch(/Shop home page/)
   })
 })

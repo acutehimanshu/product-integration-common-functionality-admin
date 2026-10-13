@@ -22,6 +22,7 @@ import { HelpEditor } from "@/modules/content/help-editor"
 import { SeoEditor } from "@/modules/content/seo-editor"
 import { PageEditor, PageList, SharedBlocks } from "@/modules/content/pages-cms"
 import { Marketing } from "@/modules/content/marketing"
+import { LandingEditor } from "@/modules/content/landing-editor"
 
 const contentKeys = {
   all: ["admin", "content"] as const,
@@ -30,7 +31,16 @@ const contentKeys = {
 }
 
 const SITE_PAGES = [
-  { to: "home", title: "Home page", about: "Banners, sections, category tiles" },
+  {
+    to: "landing",
+    title: "Landing page",
+    about: "What guests see first: sections, versions, approval",
+  },
+  {
+    to: "home",
+    title: "Shop home page",
+    about: "Banners, sections, category tiles (/shop)",
+  },
   { to: "footer", title: "Footer", about: "Link columns, social media" },
   { to: "blog", title: "Blog", about: "Posts, drafts, publishing" },
   {
@@ -250,6 +260,7 @@ export default function ContentPage() {
       <Route path="pages/:id" element={<PageEditor />} />
       <Route path="shared-blocks" element={<SharedBlocks />} />
       <Route path="marketing/*" element={<Marketing />} />
+      <Route path="landing" element={<LandingEditor />} />
       <Route path=":slug" element={<LegalPageEditor />} />
     </Routes>
   )
