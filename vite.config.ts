@@ -29,7 +29,7 @@ export default defineConfig({
     },
   },
   test: {
-    coverage: coverage({ lines: 19, functions: 10, branches: 15, statements: 19 }),
+    coverage: coverage({ lines: 22, functions: 14, branches: 15, statements: 21 }),
     environment: "jsdom",
     // Tests must not depend on a local .env.local (CI and fresh clones have none).
     env: { VITE_API_BASE_URL: "http://localhost:3100" },
